@@ -87,6 +87,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
         with:
+          # Linux: skip AppImage — linuxdeploy is flaky on GitHub runners.
+          # Ship .deb only (native for Ubuntu/Debian). Win/macOS keep defaults.
+          args: ${{ matrix.platform == 'ubuntu-latest' && '--bundles deb' || '' }}
           tagName: v__VERSION__          # __VERSION__ is replaced with the app version
           releaseName: "mdTool v__VERSION__"
           releaseBody: "See the assets to download this version."
