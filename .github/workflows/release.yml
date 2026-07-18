@@ -1,0 +1,121 @@
+name: build-and-release
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: write
+
+jobs:
+  # ── CI check: does it build on every push/PR? (no release) ──────────────
+  build:
+    name: build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Linux build deps
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            librsvg2-dev libssl-dev libayatana-appindicator3-dev librust-pangocairo-dev
+
+      - name: Install JS deps
+        run: npm ci && npm --prefix tauri-app ci
+
+      - name: Install Chromium (PDF export)
+        run: npx playwright install chromium
+
+      - name: Build (CI only — no bundle)
+        # beforeBuildCommand (before-build.sh) runs vite + bundle-core automatically.
+        run: npm run tauri build
+        env:
+          CI: true
+
+  # ── Release: publish artifacts to a GitHub Release on tag push ──────────
+  release:
+    name: release (${{ matrix.platform }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Linux build deps
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            librsvg2-dev libssl-dev libayatana-appindicator3-dev librust-pangocairo-dev
+
+      - name: Install JS deps
+        run: npm ci && npm --prefix tauri-app ci
+
+      - name: Install Chromium (PDF export)
+        run: npx playwright install chromium
+
+      - name: Build and bundle
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
+        with:
+          tagName: v__VERSION__          # __VERSION__ is replaced with the app version
+          releaseName: "mdTool v__VERSION__"
+          releaseBody: "See the assets to download this version."
+          releaseDraft: true
+          prerelease: false
+
+  # ── macOS DMG: Tauri's bundled create-dmg can fail on macOS 26
+  #    ("Resource busy"). If the .dmg is missing, rebuild it with make-dmg.sh. ──
+  macos-dmg:
+    name: macos dmg (fallback)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for existing dmg
+        id: check
+        run: |
+          DMG=$(ls tauri-app/src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null || true)
+          if [ -z "$DMG" ]; then echo "missing=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Rebuild dmg via make-dmg.sh
+        if: steps.check.outputs.missing == 'true'
+        run: npm run make-dmg
+
+      - name: Upload dmg
+        if: steps.check.outputs.missing == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: tauri-app/src-tauri/target/release/bundle/dmg/*.dmg
