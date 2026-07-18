@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "bash before-build.sh || bash ../before-build.sh"
   },
   "app": {
     "windows": [
@@ -25,7 +25,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "resources": {
+      "../../bundle-staging/mdTool": "mdTool"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

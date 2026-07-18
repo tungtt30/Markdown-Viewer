@@ -14,7 +14,9 @@
     "pdf": "node --import tsx src/cli.ts",
     "playwright:install": "playwright install chromium",
     "dev": "npm --prefix tauri-app run build && node $PWD/tauri-app/dev-server.mjs",
-    "tauri": "tauri"
+    "bundle-core": "bash bundle-core.sh",
+    "tauri": "tauri",
+    "make-dmg": "bash make-dmg.sh"
   },
   "keywords": [
     "markdown",

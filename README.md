@@ -118,6 +118,32 @@ npm run build               # tsc -> dist/
 This compiles the framework-agnostic render core to `dist/`. It has no Rust
 dependency and works on both macOS and Windows.
 
+### Self-contained release bundling
+
+A released desktop app ships with **no dependency on a system Node**. Before the
+Rust binary is bundled, `bundle-core.sh` stages the render core into
+`bundle-staging/mdTool/` and Tauri embeds it in the app's `Resources/mdTool`
+(macOS) / `resources/mdTool` (Windows, Linux). The staged dir contains:
+
+- a **Node binary** at `bin/node` (copied from the build machine's PATH),
+- the compiled core at `dist/`,
+- `node_modules/` and `package.json`,
+- the theme CSS at `dist/src/theme/themes/` (themes are not compiled by `tsc`).
+
+At runtime the Rust commands (`render_file` / `export_pdf`) resolve the core via
+`core_root()`: in a bundle that is `<Resources>/mdTool` (derived from the exe
+path); in dev it falls back to the workspace root and runs `src/cli.ts` through
+`tsx`. The table below shows the command form each mode uses.
+
+| Mode | Node | CLI entry |
+| --- | --- | --- |
+| Bundled release | `…/Resources/mdTool/bin/node` | `…/Resources/mdTool/dist/src/cli.js` |
+| Dev | system `node` | workspace `src/cli.ts` (via `tsx`) |
+
+> The staged core is ~400 MB because it includes `node_modules` (Playwright's
+> Chromium download among it). Build and ship on the **same OS/arch** as your
+> target — the bundled `node` binary is platform-specific.
+
 ### Desktop app (Tauri) — requires Rust
 
 | Action | macOS | Windows |
@@ -132,6 +158,26 @@ The compiled app lands in `tauri-app/src-tauri/target/release/`:
 
 > On Windows the first `tauri build` can take several minutes while it compiles
 > the Rust backend and bundles WebView2. This is normal.
+
+#### macOS: DMG bundling workaround
+
+On **macOS 15 / 26 (Tahoe)**, Tauri's vendored `create-dmg` fails at the final
+step with `hdiutil: couldn't unmount "diskN" - Resource busy`. The Finder window
+it opens on the mounted volume (and QuickLook/Spotlight) keeps the volume busy so
+it can't be unmounted. The `.app` bundle still builds fine — only the `.dmg`
+step aborts.
+
+To produce the `.dmg` reliably, use the committed helper instead of relying on
+Tauri's bundled script:
+
+```bash
+npm run tauri build     # builds the .app (the dmg step may fail — that's ok)
+npm run make-dmg        # creates the .dmg from the already-built .app
+```
+
+`make-dmg.sh` closes the Finder window and force-unmounts the volume, sidestepping
+the lock. The resulting `.dmg` is at
+`tauri-app/src-tauri/target/release/bundle/dmg/mdTool_0.1.0_aarch64.dmg`.
 
 ---
 
