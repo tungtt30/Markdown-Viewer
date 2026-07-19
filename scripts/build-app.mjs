@@ -15,7 +15,9 @@ const FRONTEND = resolve(ROOT, "tauri-app");
 
 function run(cwd, cmd, args) {
   console.log(`▶ ${cmd} ${args.join(" ")}  (cwd: ${cwd})`);
-  execFileSync(cmd, args, { cwd, stdio: "inherit" });
+  // Use a shell so `npm` resolves to npm.cmd on Windows; without `shell: true`,
+  // execFileSync("npm", ...) fails with ENOENT because npm isn't a real binary there.
+  execFileSync(cmd, args, { cwd, stdio: "inherit", shell: true });
 }
 
 // 1) Frontend bundle.

@@ -1,6 +1,6 @@
 [package]
 name = "mdtool-tauri"
-version = "0.1.5"
+version = "0.1.6"
 description = "mdTool desktop: render Markdown/Jupyter to themed PDF"
 edition = "2021"
 rust-version = "1.77"
