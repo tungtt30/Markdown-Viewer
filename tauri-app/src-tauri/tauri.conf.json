@@ -25,6 +25,7 @@
   },
   "bundle": {
     "active": true,
+    "author": "GodSeeker",
     "targets": "all",
     "resources": {
       "../../bundle-staging/mdTool": "mdTool"
