@@ -15,6 +15,7 @@
     "playwright:install": "playwright install chromium",
     "dev": "npm --prefix tauri-app run build && node $PWD/tauri-app/dev-server.mjs",
     "bundle-core": "bash bundle-core.sh",
+    "build:app": "node scripts/build-app.mjs",
     "tauri": "tauri",
     "make-dmg": "bash make-dmg.sh"
   },

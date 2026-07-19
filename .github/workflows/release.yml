@@ -79,8 +79,30 @@ jobs:
           releaseDraft: true
           prerelease: false
 
-  # ── macOS DMG: Tauri's bundled create-dmg can fail on macOS 26
-  #    ("Resource busy"). If the .dmg is missing, rebuild it with make-dmg.sh. ──
+      # ── macOS DMG fallback: Tauri's vendored create-dmg can fail on macOS 26
+      #    ("Resource busy"). The .app is already built on this same runner, so
+      #    if the .dmg is missing we rebuild it with make-dmg.sh. ──
+      - name: Check for existing dmg (macOS only)
+        if: matrix.platform == 'macos-latest'
+        id: check
+        run: |
+          DMG=$(ls tauri-app/src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null || true)
+          if [ -z "$DMG" ]; then echo "missing=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Rebuild dmg via make-dmg.sh (macOS only)
+        if: matrix.platform == 'macos-latest' && steps.check.outputs.missing == 'true'
+        run: npm run make-dmg
+
+      - name: Upload dmg (macOS only)
+        if: matrix.platform == 'macos-latest' && steps.check.outputs.missing == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: tauri-app/src-tauri/target/release/bundle/dmg/*.dmg
+
+  # ── macOS DMG fallback (separate job): if the release job's dmg failed or a
+  #    runner-level issue left the .app behind without a dmg, rebuild it here.
+  #    This re-runs the full build (app bundles are not shared between jobs). ──
   macos-dmg:
     name: macos dmg (fallback)
     if: startsWith(github.ref, 'refs/tags/v')
@@ -88,6 +110,24 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install JS deps
+        run: npm ci && npm --prefix tauri-app ci
+
+      - name: Install Chromium (PDF export)
+        run: npx playwright install chromium
+
+      - name: Build the .app bundle
+        run: npm run tauri build
+        env:
+          CI: true
 
       - name: Check for existing dmg
         id: check

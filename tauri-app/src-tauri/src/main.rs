@@ -68,6 +68,20 @@ fn core_root() -> PathBuf {
     bundled_core_dir().unwrap_or_else(workspace_root)
 }
 
+/// Point Playwright at the bundled Chromium (next to the core root), so PDF
+/// export works on the user's machine without any installed system browser.
+fn playwright_env(root: &PathBuf) -> Option<(String, String)> {
+    let pw = root.join("ms-playwright");
+    if pw.exists() {
+        Some((
+            "PLAYWRIGHT_BROWSERS_PATH".to_string(),
+            pw.to_string_lossy().into_owned(),
+        ))
+    } else {
+        None
+    }
+}
+
 /// Locate the Node interpreter and the mdTool CLI entry.
 ///
 /// In a bundled release we use the shipped Node binary (`$CORE/bin/node`) and the
@@ -83,7 +97,8 @@ fn core_cli() -> (String, Vec<String>) {
     } else if root.join("bin").join("node.exe").exists() {
         root.join("bin").join("node.exe")
     } else {
-        root.join("bin").join("node")
+        // No bundled interpreter — fall back to the system `node` (dev builds).
+        PathBuf::new()
     };
     let node = std::env::var("NODE_BIN").unwrap_or_else(|_| {
         if bundled_node.exists() {
@@ -120,6 +135,18 @@ fn core_cli() -> (String, Vec<String>) {
     }
 }
 
+/// Resolve the core root, then spawn the Node command with the bundled
+/// Chromium env so PDF export works without any installed system browser.
+fn spawn_core(base_args: Vec<String>, node: String) -> std::io::Result<std::process::Output> {
+    let root = core_root();
+    let mut cmd = Command::new(node);
+    cmd.args(&base_args);
+    if let Some((k, v)) = playwright_env(&root) {
+        cmd.env(k, v);
+    }
+    cmd.output()
+}
+
 #[tauri::command]
 fn render_file(path: String, theme: String) -> Result<String, String> {
     let (node, base) = core_cli();
@@ -129,9 +156,7 @@ fn render_file(path: String, theme: String) -> Result<String, String> {
     args.push(theme);
     args.push("--preview".into());
 
-    let output = Command::new(node)
-        .args(&args)
-        .output()
+    let output = spawn_core(args, node)
         .map_err(|e| format!("failed to launch mdTool core: {e}"))?;
 
     if !output.status.success() {
@@ -153,9 +178,7 @@ fn export_pdf(path: String, out: String, theme: String) -> Result<(), String> {
     args.push("--out".to_string());
     args.push(out.clone());
 
-    let output = Command::new(node)
-        .args(&args)
-        .output()
+    let output = spawn_core(args, node)
         .map_err(|e| format!("failed to launch mdTool core: {e}"))?;
 
     if !output.status.success() {

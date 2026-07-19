@@ -14,7 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$SCRIPT_DIR/tauri-app/src-tauri/target/release/bundle/macos"
 APP="$APP_DIR/mdTool.app"
 OUT_DIR="$SCRIPT_DIR/tauri-app/src-tauri/target/release/bundle/dmg"
-OUT="$OUT_DIR/mdTool_0.1.0_aarch64.dmg"
+# Derive a sensible output name; fall back to a fixed name if lookup fails.
+APP_VERSION="$(grep -m1 '"version"' tauri-app/src-tauri/tauri.conf.json 2>/dev/null | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+OUT="$OUT_DIR/mdTool_${APP_VERSION:-0.0.0}_aarch64.dmg"
 SRC_RW="$OUT_DIR/rw.mdtool.dmg"
 
 if [[ ! -d "$APP" ]]; then
@@ -25,15 +27,14 @@ fi
 mkdir -p "$OUT_DIR"
 rm -f "$OUT" "$SRC_RW"
 
-# Size the image from the .app contents (+ headroom).
-SIZE_MB=$(( ( $(du -sm "$APP" | cut -f1) + 20 ) ))
-
 # Close any Finder window that may hold a volume lock (macOS 15/26 fix).
 osascript -e 'tell application "Finder" to close every window' 2>/dev/null || true
 
-echo "Creating read-write DMG ($SIZE_MB MB)..."
+# Let hdiutil size the image from the source folder (the bundled Chromium +
+# node_modules make the app ~1GB, so we don't pin a fixed -size).
+echo "Creating read-write DMG..."
 hdiutil create -srcfolder "$APP" -volname "mdTool" -fs HFS+ \
-  -format UDRW -size "${SIZE_MB}m" "$SRC_RW"
+  -format UDRW "$SRC_RW"
 
 DEV=$(hdiutil attach -readwrite -noverify -noautoopen "$SRC_RW" | grep -E '^/dev/' | sed 1q | awk '{print $1}')
 MOUNT="/Volumes/mdTool"
