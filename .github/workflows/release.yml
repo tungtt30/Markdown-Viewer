@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-latest, windows-latest]
+        platform: [macos-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -28,13 +28,6 @@ jobs:
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Linux build deps
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
-            librsvg2-dev libssl-dev libayatana-appindicator3-dev librust-pangocairo-dev
 
       - name: Install JS deps
         run: npm ci && npm --prefix tauri-app ci
@@ -56,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-latest, windows-latest]
+        platform: [macos-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -67,13 +60,6 @@ jobs:
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Linux build deps
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
-            librsvg2-dev libssl-dev libayatana-appindicator3-dev librust-pangocairo-dev
 
       - name: Install JS deps
         run: npm ci && npm --prefix tauri-app ci
@@ -87,9 +73,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
         with:
-          # Linux: skip AppImage — linuxdeploy is flaky on GitHub runners.
-          # Ship .deb only (native for Ubuntu/Debian). Win/macOS keep defaults.
-          args: ${{ matrix.platform == 'ubuntu-latest' && '--bundles deb' || '' }}
           tagName: v__VERSION__          # __VERSION__ is replaced with the app version
           releaseName: "mdTool v__VERSION__"
           releaseBody: "See the assets to download this version."
