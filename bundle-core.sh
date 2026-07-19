@@ -41,8 +41,11 @@ if [[ -z "$NODE_BIN" ]]; then
   echo "ERROR: 'node' not found on PATH; cannot bundle a Node runtime." >&2
   exit 1
 fi
-# On Windows `command -v` returns e.g. `/c/Program Files/nodejs/node` (no .exe).
-if [[ ! -x "$NODE_BIN" && -f "${NODE_BIN}.exe" ]]; then
+# On Windows `command -v` returns e.g. `/c/Program Files/nodejs/node` (no .exe),
+# and that bare path is not directly runnable. If the resolved name has no .exe
+# extension but a sibling `<name>.exe` exists, use that so the copied binary is
+# actually executable on Windows. main.rs also checks both `node` and `node.exe`.
+if [[ "${NODE_BIN##*.}" != "exe" && -f "${NODE_BIN}.exe" ]]; then
   NODE_BIN="${NODE_BIN}.exe"
 fi
 NODE_NAME="$(basename "$NODE_BIN")"
@@ -84,3 +87,7 @@ fi
 echo "Staged core at $STAGE"
 echo "  node: $($STAGE/bin/$NODE_NAME --version) ($NODE_NAME)"
 echo "  size: $(du -sh "$STAGE" | cut -f1)"
+
+# Drop macOS metadata so it doesn't leak into the shipped bundle.
+find "$STAGE" -name '.DS_Store' -delete 2>/dev/null || true
+# Drop the dev-only tsx entry so the bundled core never pulls the dev runtime.
