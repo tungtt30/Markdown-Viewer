@@ -41,10 +41,15 @@ jobs:
         env:
           CI: true
 
-  # ── Release: publish artifacts to a GitHub Release on tag push ──────────
+  # ── Release: publish official (production) artifacts to a GitHub Release.
+  #    Runs on a version tag (v*) OR any push to main. Tag pushes publish under
+  #    the app version (v__VERSION__); main pushes get a unique tag
+  #    (v__VERSION__-<sha>) so repeated pushes never collide. ───────────────
   release:
     name: release (${{ matrix.platform }})
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: build
     strategy:
       fail-fast: false
@@ -67,16 +72,29 @@ jobs:
       - name: Install Chromium (PDF export)
         run: npx playwright install chromium
 
+      # Compute the release tag: use the app version for tag pushes, and a
+      # version+sha tag for plain main pushes (keeps each push a distinct,
+      # installable official release without overwriting the previous one).
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            VER="$(grep -m1 '"version"' tauri-app/src-tauri/tauri.conf.json | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+            echo "tag=v${VER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and bundle
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
         with:
-          tagName: v__VERSION__          # __VERSION__ is replaced with the app version
+          tagName: ${{ steps.tag.outputs.tag }}
           releaseName: "mdTool v__VERSION__"
           releaseBody: "See the assets to download this version."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
 
       # ── macOS DMG fallback: Tauri's vendored create-dmg can fail on macOS 26
@@ -97,7 +115,7 @@ jobs:
         if: matrix.platform == 'macos-latest' && steps.check.outputs.missing == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
           files: tauri-app/src-tauri/target/release/bundle/dmg/*.dmg
 
   # ── macOS DMG fallback (separate job): if the release job's dmg failed or a
@@ -105,7 +123,9 @@ jobs:
   #    This re-runs the full build (app bundles are not shared between jobs). ──
   macos-dmg:
     name: macos dmg (fallback)
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: release
     runs-on: macos-latest
     steps:
@@ -129,6 +149,16 @@ jobs:
         env:
           CI: true
 
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            VER="$(grep -m1 '"version"' tauri-app/src-tauri/tauri.conf.json | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+            echo "tag=v${VER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check for existing dmg
         id: check
         run: |
@@ -143,5 +173,5 @@ jobs:
         if: steps.check.outputs.missing == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
           files: tauri-app/src-tauri/target/release/bundle/dmg/*.dmg
