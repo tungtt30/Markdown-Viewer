@@ -1,6 +1,6 @@
 {
   "name": "mdtool",
-  "version": "0.1.6",
+  "version": "1.0.7",
   "description": "Render Markdown and Jupyter notebooks with beautiful themes and export faithful PDFs.",
   "type": "module",
   "author": "GodSeeker",
