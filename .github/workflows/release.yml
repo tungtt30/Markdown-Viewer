@@ -10,6 +10,12 @@ on:
 permissions:
   contents: write
 
+# Force bash for all inline `run:` scripts so bash syntax (e.g. `if [[ ... ]]`)
+# works on every runner, including windows-latest which defaults to PowerShell.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ── CI check: does it build on every push/PR? (no release) ──────────────
   build:
@@ -77,6 +83,7 @@ jobs:
       # installable official release without overwriting the previous one).
       - name: Resolve release tag
         id: tag
+        shell: bash
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
@@ -103,6 +110,7 @@ jobs:
       - name: Check for existing dmg (macOS only)
         if: matrix.platform == 'macos-latest'
         id: check
+        shell: bash
         run: |
           DMG=$(ls tauri-app/src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null || true)
           if [ -z "$DMG" ]; then echo "missing=true" >> "$GITHUB_OUTPUT"; fi
@@ -151,6 +159,7 @@ jobs:
 
       - name: Resolve release tag
         id: tag
+        shell: bash
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
@@ -161,6 +170,7 @@ jobs:
 
       - name: Check for existing dmg
         id: check
+        shell: bash
         run: |
           DMG=$(ls tauri-app/src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null || true)
           if [ -z "$DMG" ]; then echo "missing=true" >> "$GITHUB_OUTPUT"; fi
